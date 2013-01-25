@@ -1,6 +1,7 @@
 # w-Magic-Slider
 
 基于Magic-Slider修改。
+
 based on Magic-Slider
 
 Magic-Slider original info:
