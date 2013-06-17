@@ -4,6 +4,8 @@
 
 based on Magic-Slider
 
+MIT license
+
 Magic-Slider original info:
    
    <blockquote>
