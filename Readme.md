@@ -2,6 +2,17 @@
 
 基于Magic-Slider修改。
 
+更新信息：
+
+    2013-6-25
+    设置中增加externalTriggerHighlightClass，外部触发器的高亮class设定
+    设置中增加functionsOut，把一些方法传出去（并非最好的办法），待改进
+    设置中增加firstPanelLoadNoAnimate，加载第一个panel，不要有动画（bool）
+    设置中增加eventBeforeSlideMove，这是一个event，在panel移动之前触发。
+    增加触摸功能（很基础的）
+    改进：jquery为noconlict模式时也可以使用。
+
+
 based on Magic-Slider
 
 MIT license

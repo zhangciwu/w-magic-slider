@@ -1,17 +1,14 @@
-/*
-  magic-slider ... Version 0.1.0
-  https://github.com/orangenwerk/magic-slider   /   http://orangenwerk.github.com/magic-slider/
-  **************************************************************************************************
-  based on jQuery Coda-Slider v2.0 / Coda-Slider v2.1 / moutardeSlider
-  Coda-Slider v2.0 - http://www.ndoherty.biz/coda-slider
-  Coda-Slider v2.1 - https://github.com/jgillman/Coda-Slider-2.1
-  moutardeSlider - https://github.com/fstephany/moutardeSlider
-  MIT license.
-  **************************************************************************************************
-  improvenments by Austin Strange
+/*!
+    w-magic-slider (modify by w)
+    original info:
+	  magic-slider ... Version 0.1.0
+	  https://github.com/orangenwerk/magic-slider
+	MIT license
 */
 
-$.fn.magicSlider = function(settings) {
+
+window.jQuery.fn.magicSlider = function(settings) {
+	var $=window.jQuery;
 
 	settings = $.extend({
 		autoHeight: true,
@@ -31,13 +28,19 @@ $.fn.magicSlider = function(settings) {
 		dynamicTabsContent: "title",		// "title" / "count"
 		externalTriggerSelector: "a.xtrig",
 		highlightExternalTrigger: false,
+		externalTriggerHighlightClass:'current',
+		functionsOut:{},
 		firstPanelToLoad: 1,
+		firstPanelLoadNoAnimate: false,
 		panelTitleSelector: "h2.title",
 		slideEaseDuration: 1000,
 		slideEaseFunction: "swing",
 		slideDirection: "horizontal", // "horizontal" / "vertical"
 		carousel: false,
 		changeSliderHeadline: false,
+		eventBeforeSlideMove:function(targetPanelIndex,panelCount){},//eventBeforeSlideMove(targetPanelIndex)
+		touchSlideSwitch:true,
+		touchSlideTriggerPixels:50,
 		sliderHeadlineSelector: "#magic_slider_head" 		// Selector for headline
 	}, settings);
 
@@ -45,6 +48,8 @@ $.fn.magicSlider = function(settings) {
 
 		var 	slider 		= $(this),
 				sliderID 	= slider.attr('id');
+
+		var isAnimating=false;
 
 		// If Headlineanimation wanted
 		if ( settings.changeSliderHeadline == true ){ var panelHeadlines = new Array(); };
@@ -63,6 +68,7 @@ $.fn.magicSlider = function(settings) {
 				};
 			};
 		});
+		//console.log('panelsHeights',panelsHeights);
 		
 		var biggestPanel = Array_max( panelsHeights );
 
@@ -76,8 +82,8 @@ $.fn.magicSlider = function(settings) {
 		// Slider vars
 		var 	panelWidth = slider.find('.' + sliderID + '_panel').width(),
 				panelCount = slider.find('.' + sliderID + '_panel').size(),
-				navClicks = 0; 		// Used if autoSlideStopWhenClicked = true
-				last = false; 		// Used in carousel mode
+				navClicks = 0, 		// Used if autoSlideStopWhenClicked = true
+				last = false, 		// Used in carousel mode
 				clon = ''; 			// Used in carousel mode => 'first' / 'last'
 
 		// Special vars depend on Slider-Type
@@ -106,6 +112,8 @@ $.fn.magicSlider = function(settings) {
 			}
 		};
 
+		var classNeedRemove=null;
+
 		// Surround the collection of panel divs with a container div (wide enough for all panels to be lined up end-to-end)
 		$('.' + sliderID + '_panel', slider).wrapAll('<div class="' + sliderID + '_panel_container panel-container"></div>');
 		// Specify the width of the container div (wide enough for all panels to be lined up end-to-end)
@@ -123,10 +131,10 @@ $.fn.magicSlider = function(settings) {
 		} else { 
 			var currentPanel = 1;
 		};
-		moveToPanel(currentPanel);
+		classNeedRemove=settings.externalTriggerHighlightClass.replace('{panel_num}',currentPanel);;
+		moveToPanel(currentPanel,settings.firstPanelLoadNoAnimate);
 
-		// Left-Nav = click
-		$("#magic-nav-left-" + sliderID + " a").click(function(){
+		function moveLeft(){
 			navClicks++;
 			var navList = $(this).parents('div.magic-slider-wrapper').find('.magic-nav ul');
 			if (currentPanel == 1 && !settings.carousel) {
@@ -144,10 +152,9 @@ $.fn.magicSlider = function(settings) {
 			moveToPanel(currentPanel);
 			if (settings.crossLinking) { location.hash = currentPanel }; // Change the URL hash (cross-linking)
 			return false;
-		});
+		}
 
-		// Right-Nav = click
-		$('#magic-nav-right-' + sliderID + ' a').click(function(){
+		function moveRight(){
 			navClicks++;
 			var navList = $(this).parents('div.magic-slider-wrapper').find('.magic-nav ul');
 			if (currentPanel == panelCount && !settings.carousel) {
@@ -165,6 +172,16 @@ $.fn.magicSlider = function(settings) {
 			moveToPanel(currentPanel);
 			if (settings.crossLinking) { location.hash = currentPanel }; // Change the URL hash (cross-linking)
 			return false;
+		}
+
+		// Left-Nav = click
+		$("#magic-nav-left-" + sliderID + " a").click(function(){
+			return moveLeft()
+		});
+
+		// Right-Nav = click
+		$('#magic-nav-right-' + sliderID + ' a').click(function(){
+			return moveRight()
 		});
 
 		// If we need a dynamic menu
@@ -213,16 +230,31 @@ $.fn.magicSlider = function(settings) {
 			});
 		});
 
+
+
 		// External triggers (anywhere on the page)
 		$(settings.externalTriggerSelector).each(function() {
+			var $this=$(this);
 			// Make sure this only affects the targeted slider
 			if ( sliderID == $(this).attr("rel") ) {
-				$(this).bind("click", function() {
+				$this.bind("click", function() {
 					navClicks++;
-					targetPanel = parseInt($(this).attr("href").slice(1));
+					var re=/\#(.*)$/;
+					try{
+						targetPanel = parseInt(re.exec( $(this).attr("href"))[1]);
+					}catch(e){
+						return false;
+					}
 					if ( settings.highlightExternalTrigger == true ) {
-						$('a[rel="' + sliderID + '"]').removeClass("current");
-						$('a[rel="' + sliderID + '"][href="#' + targetPanel +'"]').addClass("current");
+						$('a[rel="' + sliderID + '"]')
+							.removeClass(settings.externalTriggerHighlightClass.replace('{panel_num}',targetPanel));
+						if (classNeedRemove){
+							$('a[rel="' + sliderID + '"]')
+								.removeClass(classNeedRemove);
+						}
+						$('a[rel="' + sliderID + '"][href$="#' + targetPanel +'"]')
+							.addClass(settings.externalTriggerHighlightClass.replace('{panel_num}',targetPanel));
+						classNeedRemove= settings.externalTriggerHighlightClass.replace('{panel_num}',targetPanel);
 						// $(this).addClass("current");
 					};
 					offset = - (panelWidth*(targetPanel - 1));
@@ -267,18 +299,25 @@ $.fn.magicSlider = function(settings) {
 			});
 		};
 
-		function alterPanelHeight(x) {
+		function alterPanelHeight(x,noAnimation) {
 			if (settings.autoHeight) {
-				panelHeight = $('.' + sliderID + '_panel:eq(' + x + ')', slider).height()
-				slider.animate({ height: panelHeight }, settings.autoHeightEaseDuration, settings.autoHeightEaseFunction);
+				panelHeight = $('.' + sliderID + '_panel:eq(' + x + ')', slider).height();
+				if (noAnimation){
+					slider.css({ height: panelHeight });
+				}else{
+
+					slider.animate({ height: panelHeight }, settings.autoHeightEaseDuration, settings.autoHeightEaseFunction);
+				}
 			};
 		};
 
 		function autoSlide() {
+			if(!settings.autoCycle){
+				return false;
+			}
 			if (navClicks == 0 || !settings.autoSlideStopWhenClicked) {
 				if (currentPanel == panelCount) {
-					if(!settings.autoCycle)
-					return false;
+
 					currentPanel = 1;
 				} else {
 					currentPanel += 1;
@@ -289,42 +328,82 @@ $.fn.magicSlider = function(settings) {
 			};
 		};
 
-		function moveToPanel(targetPanelIndex) {
+		function moveToPanel(direction,noAnimation) {
+			var targetPanelIndex;
+			if (typeof direction=='number'){
+				targetPanelIndex=direction;
+			}else{
+				targetPanelIndex =currentPanel+ ( ( direction === 'right' )?1:-1);
+				targetPanelIndex = (targetPanelIndex-1) % panelCount+1;
+				(targetPanelIndex<1) && (targetPanelIndex+=panelCount);
+			}
+
+
+
+			//console.log('moveToPanel', targetPanelIndex);
+
+			settings.eventBeforeSlideMove(targetPanelIndex,panelCount);
 			var navList = $('#magic-nav-' + sliderID + ' ul');
 			var currentLink = navList.find('li:eq(' + (targetPanelIndex - 1) + ') a');
 			navList.find('a').removeClass('current');
 			currentLink.addClass('current');
 			if ( last == true ) {
-				doTheDouble( clon )
+				doTheDouble( clon );
 				last = false;
 				clon = '';
 			} else {
-				doThePanelMove(targetPanelIndex);
+				doThePanelMove(targetPanelIndex,noAnimation);
 			};
 			if ( settings.changeSliderHeadline == true ){
 				$(settings.sliderHeadlineSelector).html( panelHeadlines[ targetPanelIndex - 1 ] );
 			};
+
 			if ( settings.highlightExternalTrigger == true ) {
-				$('a[rel="' + sliderID + '"]').removeClass("current");
-				$('a[rel="' + sliderID + '"][href="#' + targetPanelIndex +'"]').addClass("current"); // $(this).addClass("current");
+				$('a[rel="' + sliderID + '"]')
+					.removeClass(settings.externalTriggerHighlightClass.replace('{panel_num}',targetPanelIndex));
+				if (classNeedRemove){
+					$('a[rel="' + sliderID + '"]')
+						.removeClass(classNeedRemove);
+				}
+				$('a[rel="' + sliderID + '"][href$="#' + targetPanelIndex +'"]')
+					.addClass(settings.externalTriggerHighlightClass.replace('{panel_num}',targetPanelIndex));
+				classNeedRemove= settings.externalTriggerHighlightClass.replace('{panel_num}',targetPanelIndex);
+				// $(this).addClass("current");
 			};
 			slider.find('div.' + sliderID + '_panel_container div.' + sliderID + '_panel').removeClass('current');
 			slider.find('div.' + sliderID + '_panel_container div.' + sliderID + '_panel:eq('+ (targetPanelIndex - 1) + ')').addClass('current');
+			currentPanel=targetPanelIndex;
 		};
 
-		function doThePanelMove(targetPanelIndex) {
-			if (settings.slideDirection == "horizontal"){
-				$('.' + sliderID + '_panel_container', slider).animate(
-					{ marginLeft: -1 * panelWidth*(targetPanelIndex -1) }, 
-					settings.slideEaseDuration, 
-					settings.slideEaseFunction
-				);
-			} else {
-				$('.' + sliderID + '_panel_container', slider).animate(
-					{ marginTop: -1 * panelContaineroffset[ targetPanelIndex -1 ] }, 
-					settings.slideEaseDuration, 
-					settings.slideEaseFunction
-				);
+		function doThePanelMove(targetPanelIndex,noAnimation) {
+			function finished(){
+				isAnimating=false;
+			}
+			if (noAnimation){
+				if (settings.slideDirection == "horizontal"){
+					$('.' + sliderID + '_panel_container', slider).css(
+						{ marginLeft: -1 * panelWidth*(targetPanelIndex -1) }
+
+					);
+				} else {
+					$('.' + sliderID + '_panel_container', slider).css(
+						{ marginTop: -1 * panelContaineroffset[ targetPanelIndex -1 ] }
+					);
+				}
+			}else{
+				if (settings.slideDirection == "horizontal"){
+					$('.' + sliderID + '_panel_container', slider).animate(
+						{ marginLeft: -1 * panelWidth*(targetPanelIndex -1) },
+						settings.slideEaseDuration,
+						settings.slideEaseFunction
+					);
+				} else {
+					$('.' + sliderID + '_panel_container', slider).animate(
+						{ marginTop: -1 * panelContaineroffset[ targetPanelIndex -1 ] },
+						settings.slideEaseDuration,
+						settings.slideEaseFunction
+					);
+				}
 			}
 		};
 
@@ -374,6 +453,79 @@ $.fn.magicSlider = function(settings) {
 		function Array_max( array ){
 			return Math.max.apply( Math, array );
 		};
+
+		//throw
+		//$.fn.magicSlider.moveToPanel=moveToPanel;
+		var moveTo= settings.functionsOut.moveTo=function(direction,noAnimate){
+
+			var targetPanelIndex;
+			if (typeof direction=='number'){
+				targetPanelIndex=direction;
+				currentPanel =targetPanelIndex;
+				moveToPanel(targetPanelIndex,noAnimate);
+				alterPanelHeight(targetPanelIndex-1,noAnimate);
+			}else{
+				targetPanelIndex =currentPanel+ ( ( direction === 'right' )?1:-1);
+				targetPanelIndex = (targetPanelIndex-1) % panelCount +1;
+				(targetPanelIndex<1)&&(targetPanelIndex+=panelCount);
+
+				if (direction=='left') {
+					return moveLeft()
+				}else if (direction=='right'){
+					return moveRight()
+				}
+			}
+			//console.log('move to ',direction,noAnimate,targetPanelIndex,currentPanel);
+
+		};
+			//moveToPanel;
+
+
+		function bindTouchMoveEvent($ele,eventMap,options){
+			options= $.extend( {
+				pixelsTrigger:20
+			},options);
+
+			var state='ready';
+			var beginPoint=[];
+
+
+			$ele.bind('touchstart touchmove touchend',function(event){
+				var touch = event.originalEvent.touches[0];
+				//$ele.append('<p>'+ event.type+" Touch x:" + touch.pageX + ", y:" + touch.pageY+'</p>');
+				if (event.type=='touchstart'){
+					if (state=='ready'){
+						state='touching';
+						beginPoint=[touch.pageX ,touch.pageY];
+					}
+				}else if(event.type=='touchmove'){
+					if (state=='touching'){
+						if (touch.pageX>beginPoint[0]+options.pixelsTrigger && Math.abs(touch.pageY-beginPoint[1]) < options.pixelsTrigger  && eventMap['right']){
+							eventMap['right']();
+							state='ready';
+						}else if (touch.pageX<beginPoint[0]-options.pixelsTrigger && Math.abs(touch.pageY-beginPoint[1]) < options.pixelsTrigger  && eventMap['left']){
+							eventMap['left']();
+							state='ready';
+						}
+					}
+				}
+			})
+		}
+
+		if (settings.touchSlideSwitch){
+			bindTouchMoveEvent(slider,{
+				'left':function(){
+					moveTo('right');
+				},
+				'right':function(){
+					moveTo('left');
+				}
+			},{pixelsTrigger:settings.touchSlideTriggerPixels})
+		}
+		//this.moveToPanel=moveToPanel;
+
+
+
 
 	});
 };
